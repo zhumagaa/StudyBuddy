@@ -20,7 +20,7 @@ void app_main() {
         vTaskDelay(10/portTICK_PERIOD_MS);
     }
 }
-
+//changes
 void init_uart(void) {
     uart_config_t uart_config = {
         .baud_rate = BAUD_RATE,
