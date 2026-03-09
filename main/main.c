@@ -86,62 +86,6 @@ void enable_digit(int digit)
     gpio_set_level(digit_pins[digit], 0);
 }
 
-// void display_number(int number)
-// {
-//     int digits[4];
-
-//     digits[0] = (number / 1000) % 10;
-//     digits[1] = (number / 100) % 10;
-//     digits[2] = (number / 10) % 10;
-//     digits[3] = number % 10;
-
-//     for (int i = 0; i < 4; i++)
-//     {
-//         disable_all_digits();
-//         set_segments(segment_map[digits[i]]);
-//         enable_digit(i);
-//         vTaskDelay(pdMS_TO_TICKS(2));  // multiplex delay
-//     }
-// }
-
-// void segment_test()
-// {
-//     enable_digit(0);  // turn on first digit only
-
-//     while (1)
-//     {
-//         for (int i = 0; i < 8; i++)
-//         {
-//             set_segments(0x00);   // turn all segments off
-//             gpio_set_level(segment_pins[i], 1);  // turn one segment on
-
-//             vTaskDelay(pdMS_TO_TICKS(1500));  // wait 500 ms
-//         }
-//     }
-// }
-
-// void number_test() {
-//     enable_digit(0);  // turn on first digit only
-//     while(1) {
-//         for (int i=0; i<1000;i++) {
-//             display_number(i);
-//             vTaskDelay(5000 /portTICK_PERIOD_MS);
-//         }
-//     }
-// }
-
-// void digit_test() {
-//     while(1) {
-//         for (int i=0; i<4;i++) {
-//             enable_digit(i);
-//             set_segments(segment_map[0]);
-//             vTaskDelay(5000 /portTICK_PERIOD_MS);
-//             disable_all_digits();
-//             vTaskDelay(500 /portTICK_PERIOD_MS);
-//         }
-//     }
-// }
-
 void display_time(int min, int sec) {
     int digitsOnDisplay[4];
 
