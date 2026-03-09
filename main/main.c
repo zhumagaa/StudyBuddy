@@ -35,6 +35,8 @@ int entered_secs = 0;
 bool timer_started = false;     // prevents editing after timer begins
 bool timer_finished = false;    // flag when timer reaches 00:00
 
+bool invalid_time_entered = false; //invalid when seconds entered are more than 59
+
 // VARIABLES FOR KEYPAD
 #define LOOP_DELAY_MS           10      // Loop sampling time (ms)
 #define DEBOUNCE_TIME           40      // Debounce time (ms)
@@ -75,7 +77,7 @@ const uint8_t segment_map[10] = {
 };
 
 const uint8_t singularSegment[1] = {
-    0b00000010, // dash "-"
+    0b01000000, // dash "-"
 };
 
 gpio_num_t segment_pins[8] = {
@@ -200,6 +202,15 @@ void display_time(int min, int sec) {
 
 }
 
+void display_dash() { 
+    for(int i=0;i<4;i++) { 
+        disable_all_digits(); 
+        set_segments(singularSegment[0]); 
+        enable_digit(i); 
+        vTaskDelay(pdMS_TO_TICKS(2)); 
+    } 
+}
+
 void timer_countdown_task(void *arg) {
     while (1) { //needs to run continiously! do not put any delays here or it will break
         bool switch_enable = gpio_get_level(switch);
@@ -259,6 +270,10 @@ void display_task(void *arg)
 {
     while (1)
     {
+        if (invalid_time_entered) {
+            display_dash(); 
+            continue;
+        }
         if(timer_started) {
             display_time(mins, secs);
         } else {
@@ -308,12 +323,18 @@ void keypad_input_task(void *arg) {
     bool timed_out = false;
 
     while(1) {
-        /* --- s --- */
-
 
         /* --- disable any editing after timer starts --- */
         if(timer_started) 
         {
+            char key=scan_keypad(); 
+            if(key=='#') { 
+                mins=0; 
+                secs=0; 
+                timer_finished=true; 
+                countdown_running=false; 
+            }
+
             vTaskDelay(pdMS_TO_TICKS(LOOP_DELAY_MS));
             continue;
         }
@@ -351,6 +372,9 @@ void keypad_input_task(void *arg) {
         } else if (state == WAIT_FOR_RELEASE) {
             if (new_key == NOPRESS) {
                 if(last_key=='*') { 
+                    invalid_time_entered=true; 
+                    vTaskDelay(pdMS_TO_TICKS(1000)); 
+                    invalid_time_entered=false; 
                     digit_index=0; 
                     entered_mins=0; 
                     entered_secs=0; 
@@ -359,13 +383,36 @@ void keypad_input_task(void *arg) {
                 else if(last_key>='0' && last_key<='9' && digit_index<MAX_DIGITS) { 
                     digit_buffer[digit_index++]=last_key; 
                     
-                    if(digit_index==2) { 
-                        entered_mins=(digit_buffer[0]-'0')*10+(digit_buffer[1]-'0');
+                    int temp[4]={0,0,0,0};
+                    for(int i=0;i<digit_index;i++) {
+                        temp[i]=digit_buffer[i]-'0'; 
                     }
-                    if(digit_index==4) { 
-                        entered_secs=(digit_buffer[2]-'0')*10+(digit_buffer[3]-'0'); 
-                        time_entered=true; 
-                    } 
+                    
+                    entered_mins=temp[0]*10 + temp[1]; 
+                    entered_secs=temp[2]*10 + temp[3];
+                    // if(digit_index==2) { 
+                    //     entered_mins=(digit_buffer[0]-'0')*10+(digit_buffer[1]-'0');
+                    // }
+                    // if(digit_index==4) { 
+                    //     entered_secs=(digit_buffer[2]-'0')*10+(digit_buffer[3]-'0'); 
+                    //     time_entered=true; 
+                    // } 
+
+                    //check invalid seconds
+                    if(digit_index==4) {
+                        if (entered_secs>59) {
+                            invalid_time_entered=true; 
+                            vTaskDelay(pdMS_TO_TICKS(1000)); 
+                            invalid_time_entered=false; 
+                            digit_index=0; 
+                            entered_mins=0; 
+                            entered_secs=0; 
+                            time_entered=false;
+                        }
+                        else { 
+                            time_entered=true; 
+                        }
+                    }
                 }
                 state = WAIT_FOR_PRESS;
             }
