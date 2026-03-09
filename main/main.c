@@ -97,7 +97,7 @@ void init_switch()
 {
     gpio_reset_pin(switch);
     gpio_set_direction(switch, GPIO_MODE_INPUT);
-    gpio_pulldown_en(switch);
+    gpio_pullup_en(switch);
 }
 
 // INIT FOR TIMER
@@ -199,15 +199,15 @@ void display_time(int min, int sec) {
 
 void timer_countdown_task(void *arg) {
     while (1) { //needs to run continiously! do not put any delays here or it will break
-        bool switch_on = gpio_get_level(switch);
+        bool switch_enable = gpio_get_level(switch);
 
-        if(switch_on && time_entered && !countdown_running) { 
+        if(switch_enable && time_entered && !countdown_running) { 
             mins=entered_mins; 
             secs=entered_secs; 
             countdown_running=true; 
         } 
         
-        if(!switch_on) { 
+        if(!switch_enable) { 
             countdown_running=false; 
         } 
         
