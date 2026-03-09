@@ -4,7 +4,7 @@
 #include "freertos/task.h"
 
 //VARIABLES FOR SLIDE SWITCH
-#define switch GPIO_NUM_42
+#define switch GPIO_NUM_19
 
 // VARIABLES FOR TIMER
 // Segment pins
@@ -25,6 +25,12 @@
 
 int mins = 0;
 int secs = 0;
+
+bool countdown_running = false;
+bool time_entered = false;
+
+int entered_mins = 0;
+int entered_secs = 0;
 
 // VARIABLES FOR KEYPAD
 #define LOOP_DELAY_MS           10      // Loop sampling time (ms)
@@ -85,6 +91,14 @@ char keypad_array[NROWS][NCOLS] = {   // Keypad layout
     {'7', '8', '9'},
     {'*', '0', '#'}
 };
+
+//INIT FOR SWITCH
+void init_switch()
+{
+    gpio_reset_pin(switch);
+    gpio_set_direction(switch, GPIO_MODE_INPUT);
+    gpio_pulldown_en(switch);
+}
 
 // INIT FOR TIMER
 void gpio_init_all()
@@ -185,34 +199,32 @@ void display_time(int min, int sec) {
 
 void timer_countdown_task(void *arg) {
     while (1) { //needs to run continiously! do not put any delays here or it will break
-        if (input_complete)
-        {
-            mins = (digit_buffer[0]-'0')*10 + (digit_buffer[1]-'0');
-            secs = (digit_buffer[2]-'0')*10 + (digit_buffer[3]-'0');
+        bool switch_on = gpio_get_level(switch);
 
-            digit_index = 0;
-            input_complete = false;
-
-            // printf("Timer set: %02d:%02d\n", mins, secs);
-        }
-
-        if (mins > 0 || secs > 0)
-        {
-            vTaskDelay(pdMS_TO_TICKS(1000));
-
-            if (secs==0)
+        if(switch_on && time_entered && !countdown_running) { 
+            mins=entered_mins; 
+            secs=entered_secs; 
+            countdown_running=true; 
+        } 
+        
+        if(!switch_on) { 
+            countdown_running=false; 
+        } 
+        
+        if(countdown_running && (mins>0 || secs>0)) { 
+            vTaskDelay(pdMS_TO_TICKS(1000)); 
+            if(secs==0) { 
+                if(mins>0) { 
+                    mins--; 
+                    secs=59; 
+                } 
+            } else 
             {
-                if (mins>0) {
-                    mins--;
-                    secs=59;
-                }
-            } else {
-                secs--;
+                secs--; 
             }
         }
-        else
-        {
-            vTaskDelay(pdMS_TO_TICKS(100));
+        else {
+            vTaskDelay(pdMS_TO_TICKS(50));
         }
     }
 }
@@ -222,7 +234,11 @@ void display_task(void *arg)
 {
     while (1)
     {
-        display_time(mins, secs);
+        if (!countdown_running) {
+            display_time(entered_mins, entered_secs);
+        } else {
+            display_time(mins, secs);
+        }
     }
 }
 
@@ -272,6 +288,16 @@ void keypad_input_task(void *arg) {
         time += LOOP_DELAY_MS;
         timed_out = (time >= DEBOUNCE_TIME);
         
+        if (countdown_running)
+        {
+            vTaskDelay(pdMS_TO_TICKS(LOOP_DELAY_MS));
+            continue;
+        }
+
+        new_key=scan_keypad(); 
+        time+=LOOP_DELAY_MS; 
+        timed_out=(time>=DEBOUNCE_TIME);
+
         if (state == WAIT_FOR_PRESS) {
             if (new_key != NOPRESS) {
                 last_key = new_key;   // store first detection
@@ -289,16 +315,23 @@ void keypad_input_task(void *arg) {
             }
         } else if (state == WAIT_FOR_RELEASE) {
             if (new_key == NOPRESS) {
-                // key released → output the stored key
-                // printf("Key pressed: %c\n", last_key);
-                if (digit_index < MAX_DIGITS && last_key >= '0' && last_key <= '9') 
-                { 
-                    digit_buffer[digit_index++] = last_key; 
-                } 
-                if (digit_index == MAX_DIGITS) 
-                { 
-                    input_complete = true; 
-                } 
+                if(last_key=='*') { 
+                    digit_index=0; 
+                    entered_mins=0; 
+                    entered_secs=0; 
+                    time_entered=false; 
+                }
+                else if(last_key>='0' && last_key<='9' && digit_index<MAX_DIGITS) { 
+                    digit_buffer[digit_index++]=last_key; 
+                    
+                    if(digit_index==2) { 
+                        entered_mins=(digit_buffer[0]-'0')*10+(digit_buffer[1]-'0');
+                    }
+                    if(digit_index==4) { 
+                        entered_secs=(digit_buffer[2]-'0')*10+(digit_buffer[3]-'0'); 
+                        time_entered=true; 
+                    } 
+                }
                 state = WAIT_FOR_PRESS;
             }
         }
@@ -309,9 +342,13 @@ void keypad_input_task(void *arg) {
 
 void app_main(void)
 {
+    init_switch();
     init_keypad();
     gpio_init_all();
     disable_all_digits();
+
+    bool state=gpio_get_level(switch);
+    printf("%d", state);
 
     xTaskCreate(keypad_input_task, "keypad_input_task", 2048, NULL, 5, NULL);
     xTaskCreate(timer_countdown_task, "timer_countdown_task", 2048, NULL, 5, NULL);
