@@ -13,5 +13,6 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=/Users/ayanat.zhu/esp/Project4/build"
-  ]
+  ],
+  "idf.flashType": "UART"
 }

@@ -20,6 +20,9 @@
 #define DIG3 13
 #define DIG4 14
 
+int mins = 0;
+int secs = 0;
+
 // VARIABLES FOR KEYPAD
 #define LOOP_DELAY_MS           10      // Loop sampling time (ms)
 #define DEBOUNCE_TIME           40      // Debounce time (ms)
@@ -36,6 +39,13 @@
 
 int row_pins[] = {GPIO_NUM_3, GPIO_NUM_8, GPIO_NUM_18, GPIO_NUM_17};     // Pin numbers for rows
 int col_pins[] = {GPIO_NUM_16, GPIO_NUM_15, GPIO_NUM_7};   // Pin numbers for columns
+
+//VARIABLES FOR STORING NUMS - KEYPAD AND TIMER COMMUNICATION
+#define MAX_DIGITS 4
+
+char digit_buffer[MAX_DIGITS];
+int digit_index = 0;
+bool input_complete = false;
 
 // SEGMENT MAPS FOR TIMER
 // Segment lookup table
@@ -171,14 +181,46 @@ void display_time(int min, int sec) {
 
 }
 
-void time_display_1s(int min, int sec)
-{
-    TickType_t start = xTaskGetTickCount();
+void timer_task(void *arg) {
+    while (1) { //needs to run continiously! do not put any delays here or it will break
+        if (input_complete)
+        {
+            mins = (digit_buffer[0]-'0')*10 + (digit_buffer[1]-'0');
+            secs = (digit_buffer[2]-'0')*10 + (digit_buffer[3]-'0');
 
-    while (xTaskGetTickCount() - start < pdMS_TO_TICKS(1000))
+            digit_index = 0;
+            input_complete = false;
+
+            // printf("Timer set: %02d:%02d\n", mins, secs);
+        }
+
+        if (mins > 0 || secs > 0)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+
+            if (secs==0)
+            {
+                if (mins>0) {
+                    mins--;
+                    secs=59;
+                }
+            } else {
+                secs--;
+            }
+        }
+        else
+        {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+}
+
+//display task
+void display_task(void *arg)
+{
+    while (1)
     {
-        display_time(min,sec);
-        // vTaskDelay(1);
+        display_time(mins, secs);
     }
 }
 
@@ -214,17 +256,62 @@ char scan_keypad()
     return key;
 }   
 
+void keypad_task(void *arg) {
+    int state = WAIT_FOR_PRESS; //state =0
+    char new_key = NOPRESS;
+    char last_key = NOPRESS;
+
+    int time = 0;
+    bool timed_out = false;
+
+    while(1) {
+        //fsm inputs update
+        new_key = scan_keypad();
+        time += LOOP_DELAY_MS;
+        timed_out = (time >= DEBOUNCE_TIME);
+        
+        if (state == WAIT_FOR_PRESS) {
+            if (new_key != NOPRESS) {
+                last_key = new_key;   // store first detection
+                time = 0;             // start debounce timer
+                state = DEBOUNCE;
+            }
+        } else if (state == DEBOUNCE){
+            if (timed_out && new_key == last_key) { 
+                // key is stable long enough → valid press
+                state = WAIT_FOR_RELEASE; 
+            }
+            else if (timed_out && new_key != last_key) {
+                // key changed during debounce → glitch/bounce
+                state = WAIT_FOR_PRESS;
+            }
+        } else if (state == WAIT_FOR_RELEASE) {
+            if (new_key == NOPRESS) {
+                // key released → output the stored key
+                // printf("Key pressed: %c\n", last_key);
+                if (digit_index < MAX_DIGITS && last_key >= '0' && last_key <= '9') 
+                { 
+                    digit_buffer[digit_index++] = last_key; 
+                } 
+                if (digit_index == MAX_DIGITS) 
+                { 
+                    input_complete = true; 
+                } 
+                state = WAIT_FOR_PRESS;
+            }
+        }
+        //loop delay
+        vTaskDelay(pdMS_TO_TICKS(LOOP_DELAY_MS));
+    }
+}
+
 void app_main(void)
 {
     init_keypad();
     gpio_init_all();
     disable_all_digits();
 
-    while (1) { //needs to run continiously! do not put any delays here or it will break
-        for (int min=89; min>=0; min--) {
-            for (int sec=59; sec>=0; sec--) {
-                time_display_1s(min,sec);
-            }
-        }
-    }
+    xTaskCreate(keypad_task, "keypad_task", 2048, NULL, 5, NULL);
+    xTaskCreate(timer_task, "timer_task", 2048, NULL, 5, NULL);
+    xTaskCreate(display_task, "display_task", 2048, NULL, 5, NULL);
 }
