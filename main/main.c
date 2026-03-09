@@ -314,7 +314,7 @@ char scan_keypad()
     return key;
 }   
 
-void keypad_input_task(void *arg) {
+void keypad_time_input_task(void *arg) {
     int state = WAIT_FOR_PRESS; //state =0
     char new_key = NOPRESS;
     char last_key = NOPRESS;
@@ -390,13 +390,6 @@ void keypad_input_task(void *arg) {
                     
                     entered_mins=temp[0]*10 + temp[1]; 
                     entered_secs=temp[2]*10 + temp[3];
-                    // if(digit_index==2) { 
-                    //     entered_mins=(digit_buffer[0]-'0')*10+(digit_buffer[1]-'0');
-                    // }
-                    // if(digit_index==4) { 
-                    //     entered_secs=(digit_buffer[2]-'0')*10+(digit_buffer[3]-'0'); 
-                    //     time_entered=true; 
-                    // } 
 
                     //check invalid seconds
                     if(digit_index==4) {
@@ -432,7 +425,7 @@ void app_main(void)
     bool state=gpio_get_level(switch);
     // printf("%d", state);
 
-    xTaskCreate(keypad_input_task, "keypad_input_task", 2048, NULL, 5, NULL);
+    xTaskCreate(keypad_time_input_task, "keypad_time_input_task", 2048, NULL, 5, NULL);
     xTaskCreate(timer_countdown_task, "timer_countdown_task", 2048, NULL, 5, NULL);
     xTaskCreate(display_task, "display_task", 2048, NULL, 5, NULL);
 }
