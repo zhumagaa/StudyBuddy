@@ -256,7 +256,7 @@ void timer_countdown_task(void *arg) {
         if (secs==0 && mins==0 && timer_started) {
             countdown_running = false;
             timer_finished = true;
-            printf("OVER");
+            // printf("OVER");
         }
 
         else {
@@ -430,7 +430,7 @@ void app_main(void)
     disable_all_digits();
 
     bool state=gpio_get_level(switch);
-    printf("%d", state);
+    // printf("%d", state);
 
     xTaskCreate(keypad_input_task, "keypad_input_task", 2048, NULL, 5, NULL);
     xTaskCreate(timer_countdown_task, "timer_countdown_task", 2048, NULL, 5, NULL);
