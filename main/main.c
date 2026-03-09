@@ -32,6 +32,9 @@ bool time_entered = false;
 int entered_mins = 0;
 int entered_secs = 0;
 
+bool timer_started = false;     // prevents editing after timer begins
+bool timer_finished = false;    // flag when timer reaches 00:00
+
 // VARIABLES FOR KEYPAD
 #define LOOP_DELAY_MS           10      // Loop sampling time (ms)
 #define DEBOUNCE_TIME           40      // Debounce time (ms)
@@ -72,7 +75,7 @@ const uint8_t segment_map[10] = {
 };
 
 const uint8_t singularSegment[1] = {
-    0b10000000, // decimal point
+    0b00000010, // dash "-"
 };
 
 gpio_num_t segment_pins[8] = {
@@ -201,16 +204,30 @@ void timer_countdown_task(void *arg) {
     while (1) { //needs to run continiously! do not put any delays here or it will break
         bool switch_enable = gpio_get_level(switch);
 
-        if(switch_enable && time_entered && !countdown_running) { 
+        /* --- timer starts --- */
+        if(switch_enable && time_entered && !timer_started) { 
             mins=entered_mins; 
             secs=entered_secs; 
-            countdown_running=true; 
+            
+            countdown_running = true;
+            timer_started = true; 
+            timer_finished = false;
+ 
         } 
         
-        if(!switch_enable) { 
-            countdown_running=false; 
-        } 
-        
+        /* --- pause timer --- */
+        if(!switch_enable && timer_started) 
+        {
+            countdown_running = false;
+        }
+
+        /* --- resume timer --- */
+        if(switch_enable && timer_started) 
+        {
+            countdown_running = true;
+        }
+
+        /* --- countdown process --- */
         if(countdown_running && (mins>0 || secs>0)) { 
             vTaskDelay(pdMS_TO_TICKS(1000)); 
             if(secs==0) { 
@@ -223,6 +240,14 @@ void timer_countdown_task(void *arg) {
                 secs--; 
             }
         }
+
+        /* --- timer finished --- */
+        if (secs==0 && mins==0 && timer_started) {
+            countdown_running = false;
+            timer_finished = true;
+            printf("OVER");
+        }
+
         else {
             vTaskDelay(pdMS_TO_TICKS(50));
         }
@@ -234,10 +259,10 @@ void display_task(void *arg)
 {
     while (1)
     {
-        if (!countdown_running) {
-            display_time(entered_mins, entered_secs);
-        } else {
+        if(timer_started) {
             display_time(mins, secs);
+        } else {
+            display_time(entered_mins, entered_secs);
         }
     }
 }
@@ -283,6 +308,16 @@ void keypad_input_task(void *arg) {
     bool timed_out = false;
 
     while(1) {
+        /* --- s --- */
+
+
+        /* --- disable any editing after timer starts --- */
+        if(timer_started) 
+        {
+            vTaskDelay(pdMS_TO_TICKS(LOOP_DELAY_MS));
+            continue;
+        }
+
         //fsm inputs update
         new_key = scan_keypad();
         time += LOOP_DELAY_MS;
