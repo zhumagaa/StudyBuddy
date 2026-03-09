@@ -3,6 +3,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+//VARIABLES FOR SLIDE SWITCH
+#define switch GPIO_NUM_42
+
 // VARIABLES FOR TIMER
 // Segment pins
 #define SEG_A 42 
@@ -136,7 +139,6 @@ void init_keypad(void) {
     }
 }
 
-
 //METHODS FOR TIMER
 void set_segments(uint8_t value)
 {
@@ -181,7 +183,7 @@ void display_time(int min, int sec) {
 
 }
 
-void timer_task(void *arg) {
+void timer_countdown_task(void *arg) {
     while (1) { //needs to run continiously! do not put any delays here or it will break
         if (input_complete)
         {
@@ -256,7 +258,7 @@ char scan_keypad()
     return key;
 }   
 
-void keypad_task(void *arg) {
+void keypad_input_task(void *arg) {
     int state = WAIT_FOR_PRESS; //state =0
     char new_key = NOPRESS;
     char last_key = NOPRESS;
@@ -311,7 +313,7 @@ void app_main(void)
     gpio_init_all();
     disable_all_digits();
 
-    xTaskCreate(keypad_task, "keypad_task", 2048, NULL, 5, NULL);
-    xTaskCreate(timer_task, "timer_task", 2048, NULL, 5, NULL);
+    xTaskCreate(keypad_input_task, "keypad_input_task", 2048, NULL, 5, NULL);
+    xTaskCreate(timer_countdown_task, "timer_countdown_task", 2048, NULL, 5, NULL);
     xTaskCreate(display_task, "display_task", 2048, NULL, 5, NULL);
 }
