@@ -3,6 +3,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+//CONSTANT VAR for task input
+int HEARTS=0;
+bool enable_set_hearts=true;
+bool hearts_are_set =false;
+
 //VARIABLES FOR SLIDE SWITCH
 #define switch GPIO_NUM_19
 
@@ -314,7 +319,7 @@ char scan_keypad()
     return key;
 }   
 
-void keypad_input_task(void *arg) {
+void keypad_time_input_task(void *arg) {
     int state = WAIT_FOR_PRESS; //state =0
     char new_key = NOPRESS;
     char last_key = NOPRESS;
@@ -422,6 +427,67 @@ void keypad_input_task(void *arg) {
     }
 }
 
+void keypad_hearts_input_task(void *arg) {
+    int state = WAIT_FOR_PRESS;
+    char new_key = NOPRESS;
+    char last_key = NOPRESS;
+
+    int time = 0;
+    bool timed_out = false;
+
+    while(1) {
+        //enter # of hearts
+        new_key = scan_keypad();
+        time += LOOP_DELAY_MS;
+        timed_out = (time >= DEBOUNCE_TIME);
+
+        if (state == WAIT_FOR_PRESS) {
+            if (new_key != NOPRESS) {
+                last_key = new_key;
+                time = 0;
+                state = DEBOUNCE;
+            }
+        }
+
+        else if (state == DEBOUNCE) {
+            if (timed_out && new_key == last_key) {
+                state = WAIT_FOR_RELEASE;
+            }
+            else if (timed_out && new_key != last_key) {
+                state = WAIT_FOR_PRESS;
+            }
+        }
+
+        else if (state == WAIT_FOR_RELEASE) {
+            if (new_key == NOPRESS) {
+                //number is pressed
+                if (last_key >= '0' && last_key <= '9') {
+                    HEARTS = last_key - '0';
+                    // printf("HEARTS set to %d\n", HEARTS);
+                }
+
+                //if * pressed - delete 
+                else if (last_key == '*') {
+                    HEARTS = 0;
+                    hearts_are_set = false;
+                    enable_set_hearts = true;
+                    // printf("HEARTS reset\n");
+                }
+                //if # pressed - confirm and continue
+                else if (last_key == '#') {
+                    hearts_are_set = true; 
+                    enable_set_hearts = false;
+                    // printf("HEARTS confirmed: %d\n", HEARTS);
+                }
+
+                state = WAIT_FOR_PRESS;
+            }
+        }
+        //loop delay
+        vTaskDelay(pdMS_TO_TICKS(LOOP_DELAY_MS));
+    }
+}
+
 void app_main(void)
 {
     init_switch();
@@ -429,12 +495,12 @@ void app_main(void)
     gpio_init_all();
     disable_all_digits();
 
-    bool state=gpio_get_level(switch);
+    // bool state=gpio_get_level(switch);
     // printf("%d", state);
 
-    xTaskCreate(keypad_input_task, "keypad_input_task", 2048, NULL, 5, NULL);
+    xTaskCreate(keypad_hearts_input_task, "keypad_hearts_input_task", 2048, NULL, 5, NULL);
 
-    // xTaskCreate(keypad_input_task, "keypad_input_task", 2048, NULL, 5, NULL);
+    // xTaskCreate(keypad_time_input_task, "keypad_time_input_task", 2048, NULL, 5, NULL);
     // xTaskCreate(timer_countdown_task, "timer_countdown_task", 2048, NULL, 5, NULL);
     // xTaskCreate(display_task, "display_task", 2048, NULL, 5, NULL);
 }
