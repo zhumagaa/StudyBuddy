@@ -3,6 +3,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+//CONSTANT VAR for task input
+int HEARTS=0;
+bool enable_set_hearts=true;
+bool hearts_are_set =false;
+
+
 //VARIABLES FOR SLIDE SWITCH
 #define switch GPIO_NUM_19
 
